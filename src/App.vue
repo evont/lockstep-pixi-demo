@@ -1,26 +1,31 @@
 <template>
-  <img alt="Vue logo" src="./assets/logo.png">
-  <HelloWorld msg="Welcome to Your Vue.js App"/>
+  <div id="app" ref="container" />
 </template>
 
 <script>
-import HelloWorld from './components/HelloWorld.vue'
-
+import { ref, onMounted } from "vue";
+import app from "./game";
 export default {
   name: 'App',
-  components: {
-    HelloWorld
+  setup() {
+    const container = ref(null);
+    onMounted(() => {
+      container.value.appendChild(app.view);
+    });
+    return {
+      container
+    }
   }
 }
 </script>
 
-<style>
-#app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-align: center;
-  color: #2c3e50;
-  margin-top: 60px;
+<style >
+html, body, div {
+  margin: 0;
+  padding: 0;
+}
+#app canvas {
+  width: 100%;
+  height: 100%;
 }
 </style>
