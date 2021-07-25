@@ -159,6 +159,8 @@ class App extends PIXI.Application {
       gameServer.roomId = databus.roomId;
 
       this.runScene(Room);
+    }).catch(() => {
+      console.log("房间已失效")
     });
   }
   checkLink() {

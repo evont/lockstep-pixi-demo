@@ -36,6 +36,7 @@ class GameServer {
     // this.bindEvents();
 
     this.isConnected = true;
+    this.isLogin = false;
     // 记录网路状态
     // wx.getNetworkType({
     //   success: (res) => {
@@ -116,7 +117,7 @@ class GameServer {
   init() {
     this.initSDK().then((event) => {
       if (event.code === ErrCode.EC_OK) {
-        // this.room.onUpdate = () => this.onRoomUpdate();
+        this.room.onUpdate = () => this.onRoomUpdate();
         this.setBroadcastCallbacks(this.room, this, this);
         this.clearCallQueue();
       }
@@ -223,6 +224,7 @@ class GameServer {
     this.statCount = 0;
     this.avgDelay = 0;
     this.delay = 0;
+    this.isLogin = false;
     this.setBroadcastCallbacks(this.room, this, {});
   }
   onRecvFromClient() {
@@ -288,7 +290,6 @@ class GameServer {
         c: ++this.statCount,
         t: +new Date(),
         e: config.msg.STAT,
-        id: databus.userId,
       });
 
       let time = new Date() - this.startTime;
@@ -325,7 +326,6 @@ class GameServer {
   }
   onRecvFrame(res) {
     const frame = res.data.frame;
-    console.log(frame);
     if (frame.id % 300 === 0) {
       console.log("heart");
     }
@@ -361,6 +361,7 @@ class GameServer {
     }
   }
   onRoomUpdate() {
+    console.log("onRoomUpdate:", this.room.roomInfo.playerList);
     if (
       this.room.roomInfo &&
       this.room.roomInfo.playerList &&
@@ -391,6 +392,7 @@ class GameServer {
             this.room.initRoom(data.roomInfo);
             // this.reconnectMaxFrameId = 0;
             // this.reconnecting = true;
+            this.isLogin = true;
             this.onStartFrameSync();
             this.startGame();
           }
@@ -435,9 +437,16 @@ class GameServer {
       });
     });
   }
-  onJoinRoom(event) {
-    console.log(event);
-  }
+  // onJoinRoom(event) {
+  //   const { roomInfo } = event.data;
+  //   if (
+  //     roomInfo &&
+  //     roomInfo.playerList &&
+  //     roomInfo.playerList.find((p) => p.id === Player.id)
+  //   ) {
+  //     this.event.emit("onRoomInfoChange", this.room.roomInfo);
+  //   }
+  // }
 
   // SDK 随机匹配
   createMatchRoom() {
@@ -458,6 +467,9 @@ class GameServer {
     this.room.matchPlayers(matchRoomPara, (event) => {
       if (event.code === ErrCode.EC_OK) {
         const { roomInfo } = event.data;
+        console.log("匹配成功", roomInfo);
+        databus.matchPattern = true;
+        this.event.emit("createRoom");
         databus.roomId = this.roomId = roomInfo.id || "";
         this.room.initRoom(roomInfo);
         this.room.sendToClient({
@@ -469,10 +481,6 @@ class GameServer {
         console.log("匹配失败", event.code);
       }
     });
-
-    databus.matchPattern = true;
-
-    this.event.emit("createRoom");
 
     // this.event.emit("onRoomInfoChange", {
     //   memberList: [
@@ -500,20 +508,29 @@ class GameServer {
     }
     return prm.then(() => {
       this.room.initRoom({ id: roomId });
-      return new Promise((resolve) => {
-        this.room.joinRoom(
-          {
-            playerInfo: {
-              name: databus.owner === Player.id ? "玩家-房主" : "玩家-受邀者",
-              customPlayerStatus: 1,
-            },
-          },
-          resolve
-        );
+      return new Promise((resolve, reject) => {
+        this.room.getRoomDetail((res) => {
+          const { data } = res;
+          if (data.roomInfo) {
+            this.room.joinRoom(
+              {
+                playerInfo: {
+                  name:
+                    databus.owner === Player.id ? "玩家-房主" : "玩家-受邀者",
+                  customPlayerStatus: 1,
+                },
+              },
+              resolve
+            );
+          } else {
+            reject()
+          }
+        });
       });
     });
   }
-  sendFrame(data) {
+  sendFrame(frameData) {
+    const data = { ...frameData, ...databus.userInfo, n: databus.userId };
     this.hasGameStart && this.room.sendFrame({ data });
   }
   getRoomInfo() {
@@ -557,7 +574,6 @@ class GameServer {
     if (!this.frameStart) {
       return;
     }
-
     // 重连中不执行渲染
     if (!this.reconnecting) {
       databus.gameInstance.renderUpdate(dt);
@@ -592,6 +608,20 @@ class GameServer {
 
     (frame.items || []).forEach((oneFrame) => {
       let obj = oneFrame.data;
+      // 如果是重新进入房间的话，复位玩家位置
+      if (this.isLogin) {
+        if (databus.playerMap[obj.n]) {
+          this.isLogin = false;
+          const { x, y, hp, desDegree } = obj;
+          databus.playerMap[obj.n].resetRender({
+            x,
+            y,
+            hp,
+            desDegree,
+          });
+          obj.e = config.msg.MOVE_STOP;
+        }
+      }
 
       switch (obj.e) {
         case config.msg.SHOOT:

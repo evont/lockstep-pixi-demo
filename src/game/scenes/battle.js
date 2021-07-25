@@ -56,7 +56,6 @@ export default class Battle extends PIXI.Container {
     this.skill.eventemitter.on("click", () => {
       const evt = {
         e: config.msg.SHOOT,
-        n: databus.userId,
       };
       databus.playerMap[evt.n].shoot();
     });
@@ -81,7 +80,6 @@ export default class Battle extends PIXI.Container {
           ? { e: config.msg.MOVE_STOP, n: databus.userId }
           : {
               e: config.msg.MOVE_DIRECTION,
-              n: databus.userId,
               d: e.degree,
             };
       gameServer.sendFrame(evt);
@@ -161,7 +159,7 @@ export default class Battle extends PIXI.Container {
       });
       this.addChild(hp);
       player.hpRender = hp;
-
+      player.userId = id;
       player.y = config.GAME_HEIGHT / 2;
       player.frameY = player.y;
       if (id === databus.owner || (databus.matchPattern && index) || isSignle) {

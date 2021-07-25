@@ -78,6 +78,7 @@ export default class Room extends PIXI.Container {
       x: config.GAME_WIDTH / 2 - 159,
       y: config.GAME_HEIGHT - 160,
       onclick: () => {
+          console.log(customPlayerStatus);
         this.gameServer.updateReadyStatus(1 - customPlayerStatus);
       },
     });
