@@ -17,14 +17,14 @@ export default {
   pixiOptions: {
     backgroundColor: 0,
     antialias: false,
-    sharedTicker: true
+    sharedTicker: true,
   },
 
   roomState: {
     inTeam: 1,
     gameStart: 2,
     gameEnd: 3,
-    roomDestroy: 4
+    roomDestroy: 4,
   },
 
   deviceinfo,
@@ -58,24 +58,28 @@ export default {
 /**
  * 随机产生 openId
  */
- const mockOpenId = () => {
+const mockOpenId = () => {
+  const mkey = "__MOCK_OPENID";
+  const localOpenId = localStorage.getItem(mkey);
+  if (localOpenId) return localOpenId;
   let str = Date.now().toString(36);
 
   for (let i = 0; i < 7; i++) {
-      str += Math.ceil(Math.random() * (10 ** 4)).toString(36);
+    str += Math.ceil(Math.random() * 10 ** 4).toString(36);
   }
-
+  localStorage.setItem(mkey, str);
   return str;
 };
 
+const openId = mockOpenId();
 export const gameInfo = {
-  openId: mockOpenId(),
-  gameId: _config.gameId,// 替换为控制台上的“游戏ID”
-  secretKey: _config.secretKey,// 替换为控制台上的“游戏key””
+  openId,
+  gameId: _config.gameId, // 替换为控制台上的“游戏ID”
+  secretKey: _config.secretKey, // 替换为控制台上的“游戏key””
 };
 
 export const gameConfig = {
-  url: _config.url,// 替换为控制台上的“域名”
+  url: _config.url, // 替换为控制台上的“域名”
   reconnectMaxTimes: 5,
   reconnectInterval: 1000,
   resendInterval: 1000,
@@ -83,5 +87,5 @@ export const gameConfig = {
 };
 
 export const matchConfig = {
-  single: _config.matchId
-}
+  single: _config.matchId,
+};

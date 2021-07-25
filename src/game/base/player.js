@@ -16,7 +16,6 @@ import databus from '../databus.js';
 
 const dpr = 2;
 
-console.log(PIXI);
 export default class Player extends PIXI.AnimatedSprite {
     constructor() {
         let alienImages = [

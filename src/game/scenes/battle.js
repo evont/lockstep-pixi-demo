@@ -19,6 +19,54 @@ export default class Battle extends PIXI.Container {
   }
 
   launch(gameServer) {
+    if (gameServer) {
+      this.initWithServer(gameServer);
+    } else {
+      this.isSignle = true;
+      this.initSingle();
+    }
+  }
+  initSingle() {
+    this.debug = new Debug();
+    this.addChild(this.debug);
+
+    this.initPlayer(true);
+
+    // 虚拟摇杆
+    this.joystick = new JoyStick((e) => {
+      console.log(e);
+      if (e === -9999) {
+        const evt = { e: config.msg.MOVE_STOP, n: databus.userId };
+        databus.playerMap[evt.n].setSpeed(0);
+        databus.playerMap[evt.n].desDegree =
+          databus.playerMap[evt.n].frameDegree;
+      } else {
+        const evt = {
+          e: config.msg.MOVE_DIRECTION,
+          n: databus.userId,
+          d: e.degree,
+        };
+        databus.playerMap[evt.n].setDestDegree(evt.d);
+      }
+    });
+    this.addChild(this.joystick);
+
+    // 技能按钮
+    this.skill = new Skill();
+    this.skill.eventemitter.on("click", () => {
+      const evt = {
+        e: config.msg.SHOOT,
+        n: databus.userId,
+      };
+      databus.playerMap[evt.n].shoot();
+    });
+    this.addChild(this.skill);
+
+    this.joystick.enable();
+    this.skill.enable();
+  }
+
+  initWithServer(gameServer) {
     this.gameServer = gameServer;
 
     this.debug = new Debug();
@@ -28,7 +76,6 @@ export default class Battle extends PIXI.Container {
 
     // 虚拟摇杆
     this.joystick = new JoyStick((e) => {
-      console.log(databus.userId);
       let evt =
         e === -9999
           ? { e: config.msg.MOVE_STOP, n: databus.userId }
@@ -44,6 +91,7 @@ export default class Battle extends PIXI.Container {
     // 技能按钮
     this.skill = new Skill();
     this.skill.eventemitter.on("click", () => {
+      console.log("shoot");
       gameServer.sendFrame({
         e: config.msg.SHOOT,
         n: databus.userId,
@@ -54,6 +102,9 @@ export default class Battle extends PIXI.Container {
     this.appendBackBtn();
 
     this.onRoomInfoChange();
+
+    this.joystick.enable();
+    this.skill.enable();
   }
 
   appendBackBtn() {
@@ -79,11 +130,24 @@ export default class Battle extends PIXI.Container {
     );
   }
 
-  initPlayer() {
-    let memberList = this.gameServer.room.roomInfo.playerList || [];
-    memberList.forEach((member, index) => {
-      let { id, name, customPlayerStatus } = member;
+  initPlayer(isSignle = false) {
+    let memberList = [];
+    if (isSignle) {
+      memberList = [
+        {
+          id: "00001",
+          name: "evont",
+          customPlayerStatus: 1,
+        },
+      ];
+      databus.userId = memberList[0].id;
+    } else {
+      memberList = this.gameServer.room.roomInfo.playerList || [];
+    }
 
+    memberList.forEach((member, index) => {
+      let { id, customPlayerStatus } = member;
+      const nickname = member.name;
       let player = new Player();
       player.setData(member);
       databus.playerMap[id] = player;
@@ -100,18 +164,18 @@ export default class Battle extends PIXI.Container {
 
       player.y = config.GAME_HEIGHT / 2;
       player.frameY = player.y;
-      if (id === databus.owner || (databus.matchPattern && index)) {
+      if (id === databus.owner || (databus.matchPattern && index) || isSignle) {
         player.x = player.width / 2;
         player.setDirection(0);
         hp.setPos(330, 56);
 
         this.createPlayerInformation(
           hp,
-          name,
+          nickname,
           !!customPlayerStatus,
           (name, value) => {
             value.x = hp.graphics.x - value.width / 2;
-            this.addChild(name, value);
+            name ? this.addChild(name, value) : this.addChild(value);
           }
         );
       } else {
@@ -121,7 +185,7 @@ export default class Battle extends PIXI.Container {
 
         this.createPlayerInformation(
           hp,
-          name,
+          nickname,
           !!customPlayerStatus,
           (name, value) => {
             value.x = hp.graphics.x - value.width / 2;
@@ -199,16 +263,11 @@ export default class Battle extends PIXI.Container {
       return;
     }
 
-    // 收到第一帧开始倒计时
-    if (frameId === 1) {
-      this.addCountdown(1);
-    }
-
-    // 倒计时后允许操作
-    if (frameId === parseInt(1000 / this.gameServer.fps)) {
-      console.log("joystick enable");
-      this.joystick.enable();
-      this.skill.enable();
+    if (!this.isSignle) {
+      // 收到第一帧开始倒计时
+      if (frameId === 1) {
+        this.addCountdown(1);
+      }
     }
 
     databus.playerList.forEach((player) => {
@@ -228,7 +287,7 @@ export default class Battle extends PIXI.Container {
 
           player.hpRender.updateHp(player.hp);
 
-          if (player.hp <= 0) {
+          if (player.hp <= 0 && this.gameServer) {
             this.gameServer.settle();
             this.gameServer.endGame();
           }
@@ -265,7 +324,8 @@ export default class Battle extends PIXI.Container {
     // })
     const isConfirm = window.confirm(content);
     if (isConfirm) {
-      if (databus.isOwner) {
+      console.log(databus.owner, databus.userId);
+      if (databus.owner == databus.userId) {
         this.gameServer.ownerLeaveRoom();
       } else {
         this.gameServer.memberLeaveRoom();

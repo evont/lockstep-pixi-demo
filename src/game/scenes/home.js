@@ -2,7 +2,7 @@ import * as PIXI from "pixi.js";
 import config from "../config.js";
 import databus from "../databus.js";
 import { createBtn, createText } from "../common/ui.js";
-
+import { EventBus } from "../common/util";
 import Debug from "../base/debug.js";
 
 export default class Home extends PIXI.Container {
@@ -29,7 +29,12 @@ export default class Home extends PIXI.Container {
         x: config.GAME_WIDTH / 2,
         y: 442,
         onclick: () => {
-          this.gameServer.createMatchRoom();
+          if (databus.isSingle) {
+            EventBus.emit("onGameStart");
+          } else {
+            this.gameServer.createMatchRoom();
+          }
+         
         },
       }),
       createBtn({

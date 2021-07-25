@@ -1,3 +1,4 @@
+import * as PIXI from "pixi.js";
 /**
  * 获取当前设备信息
  */
@@ -104,3 +105,6 @@ export function eventLog(msg) {
 export function debugLog(msg) {
   log('debug', msg, 'debug')
 }
+
+
+export const EventBus = new PIXI.utils.EventEmitter();

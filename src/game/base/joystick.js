@@ -104,7 +104,8 @@ export default class JoyStick extends PIXI.Container {
 			x: WRAPPER_X + this.radius,
 			y: WRAPPER_Y + this.radius,
 			radius: this.radius,
-			alpha: 0
+			alpha: .8,
+			color: 0x336699
 		}),
 		img = PIXI.Sprite.from('images/joystick_wrap.png');
 		
@@ -205,7 +206,6 @@ export default class JoyStick extends PIXI.Container {
         let degree = limit.degree;
         let low  = this.currentDegree - this.halfDirection;
         let high = this.currentDegree + this.halfDirection;
-
         if ( degree >= low && degree < high ) {
             return false;
         } else {

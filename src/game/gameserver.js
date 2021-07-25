@@ -1,8 +1,8 @@
 import * as PIXI from "pixi.js";
-import config, { gameConfig, gameInfo } from "./config.js";
+import config, { gameConfig, gameInfo, matchConfig } from "./config.js";
 import databus from "./databus.js";
 import { eventLog } from "./common/util";
-import { Room, Listener, ErrCode, Player } from "./mgobe/MGOBE";
+import { Room, Listener, ErrCode, Player, types } from "./mgobe/MGOBE";
 class GameServer {
   constructor() {
     this.init();
@@ -50,6 +50,7 @@ class GameServer {
         reject({ code: ErrCode.EC_OK });
       }
       Listener.init(gameInfo, gameConfig, (event) => {
+        console.log("init complete", event.code);
         if (event.code === 0) {
           this.room = new Room();
           this.gameId = gameInfo.gameId;
@@ -115,7 +116,7 @@ class GameServer {
   init() {
     this.initSDK().then((event) => {
       if (event.code === ErrCode.EC_OK) {
-        this.room.onUpdate = () => this.onRoomUpdate();
+        // this.room.onUpdate = () => this.onRoomUpdate();
         this.setBroadcastCallbacks(this.room, this, this);
         this.clearCallQueue();
       }
@@ -201,6 +202,12 @@ class GameServer {
   }
 
   reset() {
+    this.isDisconnect = false;
+    this.isLogout = false;
+    if (this.room) {
+      this.room.initRoom();
+      this.room.onUpdate = null;
+    }
     // 本地缓冲帧队列
     this.frames = [];
     // 用于标记帧同步房间是否真正开始，如果没有开始，不能发送指令，玩家不能操作
@@ -216,61 +223,59 @@ class GameServer {
     this.statCount = 0;
     this.avgDelay = 0;
     this.delay = 0;
-
-    this.isDisconnect = false;
-    this.isLogout = false;
-    if (this.room) {
-      this.room.onUpdate = null;
-      this.room.initRoom()
-    }
     this.setBroadcastCallbacks(this.room, this, {});
   }
   onRecvFromClient() {
+    console.log("Reveived");
     this.startGame();
   }
-  // TODO: replace
-  onMatch(res) {
-    const { errCode, roomInfo } = res.data;
+  // onMatch(res) {
+  //   const { errCode, roomInfo } = res.data;
 
-    if (errCode === ErrCode.EC_OK) {
-      databus.roomId = this.roomId = roomInfo.id || "";
-      this.room.initRoom(roomInfo);
-    }
+  //   if (errCode === ErrCode.EC_OK) {
+  //     databus.roomId = this.roomId = roomInfo.id || "";
+  //     this.room.initRoom(roomInfo);
+  //     console.log("Start game")
+  //     this.room.sendToClient({
+  //       recvPlayerList: [],
+  //       recvType: types.RecvType.ROOM_ALL,
+  //       msg: "START",
+  //     });
+  //   }
 
-    // let nickname = res.groupInfoList[0].memberInfoList[0].nickName;
+  // let nickname = res.groupInfoList[0].memberInfoList[0].nickName;
 
-    // databus.roomId = this.roomId = res.roomServiceAccessInfo || "";
+  // databus.roomId = this.roomId = res.roomServiceAccessInfo || "";
 
-    // this.joinRoom(databus.currAccessInfo)
-    //   .then((res) => {
-    //     let data = res.data || {};
-    //     databus.selfClientId = data.clientId;
+  // this.joinRoom(databus.currAccessInfo)
+  //   .then((res) => {
+  //     let data = res.data || {};
+  //     databus.selfClientId = data.clientId;
 
-    //     this.updateReadyStatus(true);
+  //     this.updateReadyStatus(true);
 
-    //     if (databus.userInfo.nickName !== nickname) {
-    //       setTimeout(
-    //         this.server.broadcastInRoom.bind(this, {
-    //           msg: "START",
-    //         }),
-    //         3000
-    //       );
-    //     }
+  //     if (databus.userInfo.nickName !== nickname) {
+  //       setTimeout(
+  //         this.server.broadcastInRoom.bind(this, {
+  //           msg: "START",
+  //         }),
+  //         3000
+  //       );
+  //     }
 
-    //     // wx.showToast({
-    //     //   title: "匹配成功！3秒后开始游戏",
-    //     //   icon: "none",
-    //     //   duration: 2000,
-    //     // });
-    //     console.log("匹配成功！3秒后开始游戏");
-    //   })
-    //   .catch((e) => {
-    //     console.log(e);
-    //   });
-  }
+  //     // wx.showToast({
+  //     //   title: "匹配成功！3秒后开始游戏",
+  //     //   icon: "none",
+  //     //   duration: 2000,
+  //     // });
+  //     console.log("匹配成功！3秒后开始游戏");
+  //   })
+  //   .catch((e) => {
+  //     console.log(e);
+  //   });
+  // }
 
   onStartFrameSync() {
-    console.log("onGameStart");
     this.event.emit("onGameStart");
     /*if ( needEmit ) {
             this.event.emit('onGameStart');
@@ -320,6 +325,7 @@ class GameServer {
   }
   onRecvFrame(res) {
     const frame = res.data.frame;
+    console.log(frame);
     if (frame.id % 300 === 0) {
       console.log("heart");
     }
@@ -363,44 +369,30 @@ class GameServer {
       this.event.emit("onRoomInfoChange", this.room.roomInfo);
     }
   }
-  // TODO: replace
   login() {
-    return this.server.login().then(() => {
-      this.server.getLastRoomInfo().then((res) => {
-        // 查询到之前的游戏还没结束
-        if (
-          res.data &&
-          res.data.roomInfo &&
-          res.data.roomInfo.roomState === config.roomState.gameStart
-        ) {
-          console.log("查询到还有没结束的游戏", res.data);
-
+    let prm = Promise.resolve();
+    if (!this.isInited()) {
+      prm = new Promise((resolve) => this._callqueue.push(resolve));
+    }
+    return prm.then(() => {
+      this.room.initRoom();
+      this.room.getRoomDetail((res) => {
+        const { data } = res;
+        if (data.roomInfo) {
+          console.log("查询到还有没结束的游戏", data);
           const isConfirm = window.confirm(
             "查询到之前还有尚未结束的游戏，是否重连继续游戏？"
           );
-
           if (isConfirm) {
-            this.onRoomInfoChange(res.data.roomInfo);
-            this.server
-              .reconnect({
-                accessInfo: res.data.accessInfo,
-              })
-              .then((connectRes) => {
-                console.log("未结束的游戏断线重连结果", connectRes);
-                this.reconnectMaxFrameId = connectRes.maxFrameId || 0;
-                this.reconnecting = true;
-
-                // 手动调用onGameStart模拟正常开局
-                this.onGameStart("人工");
-              })
-              .catch((e) => {
-                console.log(e, "重连失败，请重新开房间");
-                // wx.showToast({
-                //   title: "重连失败，请重新开房间",
-                //   icon: "none",
-                //   duration: 2000,
-                // });
-              });
+            // this.onRoomInfoChange(res.data.roomInfo);
+            databus.owner = data.roomInfo.owner;
+            databus.roomId = data.roomInfo.id;
+            databus.userId = Player.id;
+            this.room.initRoom(data.roomInfo);
+            // this.reconnectMaxFrameId = 0;
+            // this.reconnecting = true;
+            this.onStartFrameSync();
+            this.startGame();
           }
         }
       });
@@ -447,27 +439,50 @@ class GameServer {
     console.log(event);
   }
 
-  // TODO: replace
+  // SDK 随机匹配
   createMatchRoom() {
-    let { avatarUrl, nickName } = databus.userInfo;
+    // 注意：这里没有使用匹配属性，如果匹配规则中有设置匹配属性，这里需要做调整
+    const matchAttributes = [];
+    const playerInfo = {
+      name: `玩家-${Player.id}`,
+      customPlayerStatus: 1,
+      customProfile: Player.customProfile,
+      matchAttributes,
+    };
+    const matchRoomPara = {
+      playerInfo,
+      matchCode: matchConfig.single,
+    };
 
-    this.server.startMatch({
-      match_id: "CuQJHh6u_WqqGQ1UEzMhnfeIIgqdgCAqw12FNbl6l3E",
+    this.room.initRoom();
+    this.room.matchPlayers(matchRoomPara, (event) => {
+      if (event.code === ErrCode.EC_OK) {
+        const { roomInfo } = event.data;
+        databus.roomId = this.roomId = roomInfo.id || "";
+        this.room.initRoom(roomInfo);
+        this.room.sendToClient({
+          recvPlayerList: [],
+          recvType: types.RecvType.ROOM_ALL,
+          msg: "START",
+        });
+      } else {
+        console.log("匹配失败", event.code);
+      }
     });
 
     databus.matchPattern = true;
 
     this.event.emit("createRoom");
 
-    this.event.emit("onRoomInfoChange", {
-      memberList: [
-        { headimg: avatarUrl, nickname: nickName },
-        {
-          headimg: "images/avatar_default.png",
-          nickname: "正在匹配玩家...",
-        },
-      ],
-    });
+    // this.event.emit("onRoomInfoChange", {
+    //   memberList: [
+    //     { customProfile: Player.customProfile, name: Player.name },
+    //     {
+    //       customProfile: "images/avatar_default.png",
+    //       name: "正在匹配玩家...",
+    //     },
+    //   ],
+    // });
   }
   _callqueue = [];
   clearCallQueue() {
@@ -489,7 +504,7 @@ class GameServer {
         this.room.joinRoom(
           {
             playerInfo: {
-              name: "玩家-受邀者",
+              name: databus.owner === Player.id ? "玩家-房主" : "玩家-受邀者",
               customPlayerStatus: 1,
             },
           },
@@ -530,19 +545,8 @@ class GameServer {
   onDismissRoom() {
     this.clear();
   }
-  // TODO: replace
   cancelMatch(res) {
-    this.server.cancelMatch(res);
-  }
-  // TODO: replace
-  changeSeat(posNum) {
-    this.server
-      .changeSeat({
-        posNum,
-      })
-      .then((res) => {
-        console.log(res);
-      });
+    this.room.cancelPlayerMatch(res);
   }
   updateReadyStatus(customPlayerStatus) {
     return this.room.changeCustomPlayerStatus({
