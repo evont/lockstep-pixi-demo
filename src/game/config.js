@@ -53,6 +53,12 @@ export default {
   },
 
   playerHp: 20,
+
+  loginState: {
+    EMPTY: 0,
+    REJOIN: 1,
+    NOREJOIN: 1
+  }
 };
 
 /**
@@ -84,6 +90,7 @@ export const gameConfig = {
   reconnectInterval: 1000,
   resendInterval: 1000,
   resendTimeout: 10000,
+  isAutoRequestFrame: true,
 };
 
 export const matchConfig = {

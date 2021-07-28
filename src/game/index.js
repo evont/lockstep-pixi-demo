@@ -8,9 +8,11 @@ import Room from "./scenes/room.js";
 import Battle from "./scenes/battle.js";
 // import Result      from './scenes/result.js';
 import Home from "./scenes/home.js";
-import { eventLog, EventBus } from "./common/util.js";
+import { eventLog, EventBus, errorLog } from "./common/util.js";
 import { Player } from "./mgobe/MGOBE";
 let gameServer;
+
+const urlParams = new URL(window.location.href);
 class App extends PIXI.Application {
   constructor() {
     super({
@@ -18,6 +20,7 @@ class App extends PIXI.Application {
       height: config.GAME_HEIGHT,
       ...config.pixiOptions,
     });
+
     this.checkLink().then(() => {
       // 适配小游戏的触摸事件
       this.renderer.plugins.interaction.mapPositionToPoint = (point, x, y) => {
@@ -53,13 +56,7 @@ class App extends PIXI.Application {
     return scene;
   }
   scenesInit() {
-    // 从会话点进来的场景
-    if (databus.roomId) {
-      this.joinToRoom();
-    } else {
-      this.runScene(Home);
-    }
-    if (this.isSingle) {
+    if (databus.isSingle) {
       EventBus.on("onGameStart", () => {
         databus.gameInstance = this.runScene(Battle);
       });
@@ -69,11 +66,12 @@ class App extends PIXI.Application {
       });
 
       gameServer.event.on("createRoom", () => {
+        console.log("enfasdfa");
         this.runScene(Room);
       });
 
       gameServer.event.on("onGameStart", () => {
-        console.log("game server start")
+        console.log("game server start");
         databus.gameInstance = this.runScene(Battle);
       });
 
@@ -96,8 +94,6 @@ class App extends PIXI.Application {
         });
       });
     }
-
-    this.runScene(Home);
   }
   init() {
     this.scaleToScreen();
@@ -109,13 +105,33 @@ class App extends PIXI.Application {
     this.timer = +new Date();
     this.aniId = window.requestAnimationFrame(this.bindLoop);
 
-    gameServer.login();
-    // login.do(() => {
-    //   gameServer.login().then(() => {
-    //     this.scenesInit();
-    //   });
-    // });
+    let prm = Promise.resolve();
+    const roomId = urlParams.searchParams.get("roomId") || "";
+    if (!databus.isSingle) {
+      prm = gameServer.login(roomId);
+    }
     this.scenesInit();
+    prm.then((loginInfo) => {
+      if (!databus.isSingle) {
+        const { code: loginState, roomInfo } = loginInfo;
+        if (loginState === config.loginState.REJOIN && roomInfo) {
+          gameServer.room.initRoom(roomInfo);
+          gameServer.reJoinRoom(roomInfo);
+        } else if (loginState === config.loginState.EMPTY) {
+          if (roomId && roomInfo) {
+            this.joinToRoom(roomId);
+          } else {
+            this.runScene(Home);
+          }
+        }
+      } else {
+        this.runScene(Home);
+      }
+    });
+  }
+  destroy(...args) {
+    window.cancelAnimationFrame(this.aniId);
+    super.destroy(...args);
   }
   scaleToScreen() {
     const x = window.innerWidth / 667;
@@ -137,7 +153,7 @@ class App extends PIXI.Application {
   }
 
   _update(dt) {
-    if (this.isSingle) {
+    if (databus.isSingle) {
       if (databus.gameInstance) {
         databus.gameInstance.renderUpdate(dt);
         databus.gameInstance.logicUpdate(parseInt(1000 / 30));
@@ -149,33 +165,22 @@ class App extends PIXI.Application {
 
     Tween.update();
   }
-  joinToRoom() {
-    eventLog("加入房间中");
-    gameServer.joinRoom(databus.roomId).then((res) => {
-      let data = res.data || {};
-      console.log(res.data, Player.id);
-      databus.userId = Player.id;
-      databus.owner = data.owner;
-      gameServer.roomId = databus.roomId;
-
-      this.runScene(Room);
-    }).catch(() => {
-      console.log("房间已失效")
-    });
+  joinToRoom(roomId) {
+    eventLog("加入房间中", roomId);
+    gameServer
+      .joinRoom(roomId)
+      .then(() => {
+        this.runScene(Room);
+      })
+      .catch(() => {
+        errorLog("加房失败，id 失效");
+      });
   }
   checkLink() {
-    const urlParams = new URL(window.location.href);
     const isSingle = urlParams.searchParams.get("single");
     if (isSingle) {
       databus.isSingle = true;
-      this.isSingle = true;
     } else {
-      const roomId = urlParams.searchParams.get("roomId");
-      if (roomId) {
-        if (!databus.roomId) {
-          databus.roomId = roomId;
-        }
-      }
       return import(/* webpackChunkName: 'game-server' */ "./gameserver").then(
         (res) => {
           gameServer = res.default;

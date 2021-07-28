@@ -95,15 +95,18 @@ export function getMove(from, to) {
   return dis;
 }
 
-function log(type, msg, logType = 'log') {
+function log(type, logType = 'log', msg) {
   console[logType](`[${type}]:`, msg);
 
 }
-export function eventLog(msg) {
-  log('event', msg)
+export function eventLog(...msg) {
+  log('event', 'log', ...msg)
 }
-export function debugLog(msg) {
-  log('debug', msg, 'debug')
+export function debugLog(...msg) {
+  log('debug', 'debug', ...msg)
+}
+export function errorLog(...msg) {
+  log('error', 'error', ...msg)
 }
 
 

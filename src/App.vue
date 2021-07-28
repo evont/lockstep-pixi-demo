@@ -6,21 +6,23 @@
 import { ref, onMounted } from "vue";
 import app from "./game";
 export default {
-  name: 'App',
+  name: "App",
   setup() {
     const container = ref(null);
     onMounted(() => {
       container.value.appendChild(app.view);
     });
     return {
-      container
-    }
-  }
-}
+      container,
+    };
+  },
+};
 </script>
 
 <style >
-html, body, div {
+html,
+body,
+div {
   margin: 0;
   padding: 0;
 }

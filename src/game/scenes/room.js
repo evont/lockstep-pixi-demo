@@ -71,14 +71,11 @@ export default class Room extends PIXI.Container {
     let { customPlayerStatus } = member;
 
     const isReady = customPlayerStatus === 1;
-    let isHosticon = Player.id === databus.owner;
-
     let getReady = createBtn({
       img: "images/getReady.png",
       x: config.GAME_WIDTH / 2 - 159,
       y: config.GAME_HEIGHT - 160,
       onclick: () => {
-          console.log(customPlayerStatus);
         this.gameServer.updateReadyStatus(1 - customPlayerStatus);
       },
     });
@@ -105,8 +102,8 @@ export default class Room extends PIXI.Container {
     if (!this.allReady) {
       start.alpha = 0.5;
     }
-
-    isHosticon ? this.addChild(getReady, start) : this.addChild(getReady);
+    console.log("enhh")
+    databus.isOwner ? this.addChild(getReady, start) : this.addChild(getReady);
   }
 
   clearUI() {
@@ -168,10 +165,6 @@ export default class Room extends PIXI.Container {
     const memberList = roomInfo.playerList || [];
 
     this.allReady = !memberList.find((member) => !member.customPlayerStatus);
-
-    console.log(roomInfo);
-    databus.owner = roomInfo.owner;
-
     if (memberList.length === 1) {
       memberList.push(emptyUser);
     } else {
@@ -181,10 +174,7 @@ export default class Room extends PIXI.Container {
     memberList.forEach((member, index) => {
       member.index = index;
       let user = this.createOneUser(member);
-      if (Player.id === member.id) {
-        databus.ownerInfo = member;
-        databus.isOwner = true;
-        console.log("is owener", Player.id, member.id);
+      if (member.id === Player.id) {
         !databus.matchPattern && this.appendOpBtn(member);
       }
 
@@ -192,7 +182,7 @@ export default class Room extends PIXI.Container {
         user.interactive = true;
         user.on("pointerdown", () => {
           console.log(
-            `%c[invite inlink] %c: ${location.protocol}//${location.host}?roomId=${this.gameServer.roomId}`,
+            `%c[invite inlink] %c: ${location.protocol}//${location.host}?roomId=${databus.roomId}`,
             "background: green; padding: 0 10px; color: #fff;",
             ""
           );
@@ -220,7 +210,6 @@ export default class Room extends PIXI.Container {
 
     !databus.matchPattern &&
       gameServer.getRoomInfo(this.accessInfo).then((res) => {
-        console.log("getRoomInfo", res);
         this.handleRoomInfo(res);
       });
   }
