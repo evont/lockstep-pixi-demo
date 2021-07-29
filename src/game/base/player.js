@@ -148,7 +148,6 @@ export default class Player extends PIXI.AnimatedSprite {
       );
       let temp = (dt / (1000 / 30)) * (0.2 * (1000 / 30));
       let percent = getNumInRange(temp / dis, 0, 1);
-
       this.x += (this.preditX - this.x) * percent;
       this.y += (this.preditY - this.y) * percent;
     }
@@ -158,7 +157,6 @@ export default class Player extends PIXI.AnimatedSprite {
 
       let temp = (dt / (1000 / 30)) * 10;
       let percent = getNumInRange(temp / Math.abs(dis), 0, 1);
-
       this.currDegree += dis * percent;
 
       this.currDegree = limitNumInRange(this.currDegree, 0, 360);

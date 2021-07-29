@@ -19,39 +19,7 @@ export default class Battle extends PIXI.Container {
   }
 
   launch(gameServer) {
-    if (gameServer) {
-      this.initWithServer(gameServer);
-    } else {
-      this.initSingle();
-    }
-  }
-  initSingle() {
-    this.debug = new Debug();
-    this.addChild(this.debug);
-
-    this.initPlayer(true);
-
-    // 虚拟摇杆
-    this.joystick = new JoyStick((e) => {
-      const n = databus.userId;
-      if (e === -9999) {
-        databus.playerMap[n].setSpeed(0);
-        databus.playerMap[n].desDegree = databus.playerMap[n].frameDegree;
-      } else {
-        databus.playerMap[n].setDestDegree(e.degree);
-      }
-    });
-    this.addChild(this.joystick);
-
-    // // 技能按钮
-    // this.skill = new Skill();
-    // this.skill.eventemitter.on("click", () => {
-    //   databus.playerMap[databus.userId].shoot();
-    // });
-    // this.addChild(this.skill);
-
-    this.joystick.enable();
-    // this.skill.enable();
+    this.initWithServer(gameServer);
   }
 
   initWithServer(gameServer) {
@@ -79,7 +47,7 @@ export default class Battle extends PIXI.Container {
     this.skill = new Skill();
     this.skill.eventemitter.on("click", () => {
       gameServer.sendFrame({
-        e: config.msg.SHOOT
+        e: config.msg.SHOOT,
       });
     });
     this.addChild(this.skill);
@@ -90,6 +58,8 @@ export default class Battle extends PIXI.Container {
 
     this.joystick.enable();
     this.skill.enable();
+
+    gameServer.mockFrame?.();
   }
 
   appendBackBtn() {
@@ -109,7 +79,6 @@ export default class Battle extends PIXI.Container {
     this.gameServer.event.on(
       "onRoomInfoChange",
       ((res) => {
-        console.log(res);
         res.playerList.length < 2 &&
           this.showModal("对方已离开房间，无法继续进行PK！", true);
       }).bind(this)
@@ -121,14 +90,14 @@ export default class Battle extends PIXI.Container {
     if (databus.isSingle) {
       memberList = [
         {
-          id: "00001",
+          id: "3p7o464p",
           name: "evont",
           customPlayerStatus: 1,
           isRobot: false,
         },
         {
-          id: "00002",
-          name: "evont",
+          id: "q1qgy9mv",
+          name: "evont2",
           customPlayerStatus: 1,
           isRobot: true,
         },
@@ -137,13 +106,10 @@ export default class Battle extends PIXI.Container {
     } else {
       memberList = this.gameServer.room.roomInfo.playerList || [];
     }
-
     memberList.forEach((member, index) => {
       let { id, name: nickname, customPlayerStatus, isRobot } = member;
       let player = new Player();
       player.setData(member);
-      databus.playerMap[id] = player;
-      databus.playerList.push(player);
       this.addChild(player);
       player.isRobot = isRobot;
       let hp = new Hp({
@@ -187,7 +153,10 @@ export default class Battle extends PIXI.Container {
       }
       player.frameX = player.x;
       player.userId = id;
-      
+
+      databus.playerMap[id] = player;
+      databus.playerList.push(player);
+      console.log("init over")
     });
   }
 
@@ -260,7 +229,7 @@ export default class Battle extends PIXI.Container {
     if (!databus.isSingle) {
       // 收到第一帧开始倒计时
       if (frameId === 1) {
-        this.addCountdown(1);
+        this.addCountdown(3);
       }
     }
 
@@ -318,10 +287,14 @@ export default class Battle extends PIXI.Container {
     // })
     const isConfirm = window.confirm(content);
     if (isConfirm) {
-      if (databus.isOwner) {
-        this.gameServer.ownerLeaveRoom();
+      if (databus.isSingle) {
+        this.gameServer.clear();
       } else {
-        this.gameServer.memberLeaveRoom();
+        if (databus.isOwner) {
+          this.gameServer.ownerLeaveRoom();
+        } else {
+          this.gameServer.memberLeaveRoom();
+        }
       }
     }
   }

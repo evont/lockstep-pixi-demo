@@ -33,16 +33,9 @@ class GameServer {
     this.reconnectFail = 0;
 
     this.reset();
-    // this.bindEvents();
 
     this.isConnected = true;
     this.isLogin = false;
-    // 记录网路状态
-    // wx.getNetworkType({
-    //   success: (res) => {
-    //     this.isConnected = !!(res.networkType !== "none");
-    //   },
-    // });
   }
 
   initSDK() {
@@ -51,7 +44,6 @@ class GameServer {
         reject({ code: ErrCode.EC_OK });
       }
       Listener.init(gameInfo, gameConfig, (event) => {
-        console.log("init complete", event.code);
         if (event.code === 0) {
           this.room = new Room();
           databus.room = this.room;
@@ -124,84 +116,6 @@ class GameServer {
       }
     });
   }
-  bindEvents() {
-    // const reconnect = () => {
-    //   // 如果logout了，需要先logout再connect
-    //   if (this.isLogout && this.isDisconnect) {
-    //     this.server
-    //       .login()
-    //       .then((res) => {
-    //         console.log("networkType change or onShow -> login", res);
-    //         this.server.reconnect().then((res) => {
-    //           console.log("networkType change or onShow -> reconnect", res);
-    //           ++this.reconnectSuccess;
-    //           console.log("游戏已连接")
-    //         });
-    //       })
-    //       .catch(() => ++this.reconnectFail);
-    //   } else {
-    //     // 否则只需要处理对应的掉线事件
-    //     if (this.isLogout) {
-    //       this.server
-    //         .login()
-    //         .then((res) =>
-    //           console.log("networkType change or onShow -> login", res)
-    //         );
-    //     }
-    //     if (this.isDisconnect) {
-    //       this.server
-    //         .reconnect()
-    //         .then((res) => {
-    //           ++this.reconnectSuccess;
-    //           console.log("networkType change or onShow -> reconnect", res);
-    //           console.log("游戏已连接")
-    //         })
-    //         .catch(() => ++this.reconnectFail);
-    //     }
-    //   }
-    // };
-    // wx.onNetworkStatusChange((res) => {
-    //   console.log("当前是否有网路连接", res.isConnected);
-    //   let isConnected = res.isConnected;
-    //   console.log(
-    //     "当前状态",
-    //     this.isLogout,
-    //     this.isDisconnect,
-    //     this.isConnected
-    //   );
-    //   // 网络从无到有
-    //   if (!this.isConnected && isConnected) {
-    //     reconnect();
-    //   }
-    //   this.isConnected = isConnected;
-    // });
-    // this.server.onLogout(() => {
-    //   console.log("onLogout");
-    //   this.isLogout = true;
-    // });
-    // this.server.onDisconnect((res) => {
-    //   console.log("onDisconnect", res);
-    //   this.isDisconnect = true;
-    //   res.type !== "game" &&
-    //     console.log("游戏已掉线...")
-    //   res.type === "game" &&
-    //     (function(that) {
-    //       function relink() {
-    //         that.server
-    //           .reconnect()
-    //           .then(function(res) {
-    //             console.log("networkType change or onShow -> reconnect", res);
-    //             ++that.reconnectSuccess;
-    //           })
-    //           .catch(relink);
-    //       }
-    //       relink();
-    //     })(this);
-    // });
-    // wx.onShow(() => {
-    //   reconnect();
-    // });
-  }
 
   reset() {
     this.isDisconnect = false;
@@ -228,9 +142,11 @@ class GameServer {
     this.isLogin = false;
     this.setBroadcastCallbacks(this.room, this, {});
   }
-  onRecvFromClient() {
-    console.log("Reveived");
-    this.startGame();
+  // 当接收到广播消息
+  onRecvFromClient(evt) {
+    if (evt.data.msg === "START") {
+      this.startGame();
+    }
   }
   onMatch(res) {
     const { errCode, roomInfo } = res.data;
@@ -323,12 +239,12 @@ class GameServer {
     this.event.emit("backHome");
   }
   onRecvFrame(res) {
-    console.log(res);
     const frame = res.data.frame;
     // if (frame.id % 300 === 0) {
     //   console.log("heart");
     // }
     this.svrFrameIndex = frame.id;
+    //    databus.frameId = frame.id;
     this.frames.push(frame);
 
     if (!this.reconnecting) {
@@ -351,7 +267,7 @@ class GameServer {
       this.hasSetStart = true;
     }
 
-    if (this.reconnecting && res.frameId >= this.reconnectMaxFrameId) {
+    if (this.reconnecting && !res.isReplay) {
       this.reconnecting = false;
       this.startTime =
         new Date() - this.frameInterval * this.reconnectMaxFrameId;
@@ -372,15 +288,31 @@ class GameServer {
   }
   reJoinRoom(roomInfo) {
     if (roomInfo.frameSyncState == 1) {
-      this.onStartFrameSync();
-      this.startGame();
-      this.onRoomInfoChange(roomInfo);
+      this.reconnecting = true;
+      // if (databus.lastFrame > 0) {
+      //   this.room.requestFrame(
+      //     {
+      //       beginFrameId: 0,
+      //       endFrameId: databus.lastFrame,
+      //     },
+      //     (event) => {
+      //       this.reconnectMaxFrameId = databus.lastFrame;
+      //       this.frames.push(...event.data.frames);
+      //       this.frameStart = true;
+      //     }
+      //   );
+      // } else {
+        this.onStartFrameSync();
+        this.startGame();
+        this.onRoomInfoChange(roomInfo);
+      // }
     } else {
       debugLog("游戏尚未开始");
       this.event.emit("createRoom");
     }
     this.isLogin = true;
   }
+  // 检查当前是否存在房间
   login(roomId = "") {
     let prm = Promise.resolve();
     if (!this.isInited()) {
@@ -388,13 +320,11 @@ class GameServer {
     }
     return prm.then(() => {
       return new Promise((resolve) => {
-        // this.room.initRoom();
         Room.getRoomByRoomId(
           {
             roomId,
           },
           (res) => {
-            console.log(res, roomId)
             const { data } = res;
             const { roomInfo } = data;
             if (roomInfo) {
@@ -410,33 +340,22 @@ class GameServer {
                 );
                 if (isConfirm) {
                   resolve({
-                    code: config.loginState.REJOIN, roomInfo
+                    code: config.loginState.REJOIN,
+                    roomInfo,
                   });
-                  // // 游戏未开始
-                  // if (roomInfo.frameSyncState == 1) {
-                  //   this.onStartFrameSync();
-                  //   this.startGame();
-                  //   this.onRoomInfoChange(roomInfo);
-                  // } else {
-                  //   debugLog("游戏尚未开始");
-                  //   this.event.emit("createRoom");
-                  // }
-
-                  // this.reconnectMaxFrameId = 0;
-                  // this.reconnecting = true;
-
-                  // this.onStartFrameSync();
-                  // this.startGame();
                 } else {
                   this.memberLeaveRoom();
                   resolve({
-                    code: config.loginState.NOREJOIN, roomInfo
+                    code: config.loginState.NOREJOIN,
+                    roomInfo,
                   });
                 }
               } else {
+                // 如果有房间但是用户没有加入，就当让用户进入房间
                 resolve({ code: config.loginState.EMPTY, roomInfo });
               }
             } else {
+              // 不存在房间，直接展示首页
               resolve({ code: config.loginState.EMPTY });
             }
           }
@@ -478,16 +397,6 @@ class GameServer {
       });
     });
   }
-  // onJoinRoom(event) {
-  //   const { roomInfo } = event.data;
-  //   if (
-  //     roomInfo &&
-  //     roomInfo.playerList &&
-  //     roomInfo.playerList.find((p) => p.id === Player.id)
-  //   ) {
-  //     this.event.emit("onRoomInfoChange", this.room.roomInfo);
-  //   }
-  // }
 
   // SDK 随机匹配
   createMatchRoom() {
@@ -516,16 +425,6 @@ class GameServer {
         console.log("匹配失败", event.code);
       }
     });
-
-    // this.event.emit("onRoomInfoChange", {
-    //   memberList: [
-    //     { customProfile: Player.customProfile, name: Player.name },
-    //     {
-    //       customProfile: "images/avatar_default.png",
-    //       name: "正在匹配玩家...",
-    //     },
-    //   ],
-    // });
   }
   _callqueue = [];
   clearCallQueue() {
@@ -579,10 +478,9 @@ class GameServer {
   startGame() {
     return this.room.startFrameSync();
   }
-  memberLeaveRoom(callback, clear = true) {
-    this.room.leaveRoom().then((res) => {
-      if (clear && res.errCode === 0) this.clear();
-
+  memberLeaveRoom(callback) {
+    this.room.leaveRoom({}, (res) => {
+      if (res.errCode === 0) this.clear();
       callback && callback(res);
     });
   }
@@ -609,7 +507,7 @@ class GameServer {
     }
     // 重连中不执行渲染
     if (!this.reconnecting) {
-      databus.gameInstance.renderUpdate(dt);
+      databus.gameInstance?.renderUpdate(dt);
     }
 
     // 本地从游戏开始到现在的运行时间
@@ -636,27 +534,10 @@ class GameServer {
   execFrame() {
     let frame = this.frames.shift();
     // 每次执行逻辑帧，将指令同步后，演算游戏状态
-    databus.gameInstance.logicUpdate(this.frameInterval, frame.id);
-
+    databus.gameInstance?.logicUpdate(this.frameInterval, frame.id);
+    databus.frameId = frame.id;
     (frame.items || []).forEach((oneFrame) => {
       let obj = oneFrame.data;
-      // 如果是重新进入房间的话，复位玩家位置
-      // if (this.isLogin) {
-      //   if (databus.playerMap[obj.n]) {
-      //     this.isLogin = false;
-          
-      //     const { x, y, hp, desDegree } = obj;
-      //     databus.playerMap[obj.n].resetRender({
-      //       x,
-      //       y,
-      //       hp,
-      //       desDegree,
-      //     });
-      //     obj.e = config.msg.MOVE_STOP;
-      //   }
-      // }
-      console.log(obj.e);
-
       switch (obj.e) {
         case config.msg.SHOOT:
           databus.playerMap[obj.n].shoot();
@@ -674,7 +555,7 @@ class GameServer {
       }
     });
 
-    databus.gameInstance.preditUpdate(this.frameInterval);
+    databus.gameInstance?.preditUpdate(this.frameInterval);
   }
   settle() {
     databus.gameover = true;

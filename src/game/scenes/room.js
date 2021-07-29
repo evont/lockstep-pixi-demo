@@ -102,7 +102,6 @@ export default class Room extends PIXI.Container {
     if (!this.allReady) {
       start.alpha = 0.5;
     }
-    console.log("enhh")
     databus.isOwner ? this.addChild(getReady, start) : this.addChild(getReady);
   }
 

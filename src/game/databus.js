@@ -7,6 +7,8 @@ class DataBus {
     this.userInfo = {};
 
     this.reset();
+
+    this.lastFrame =  localStorage.getItem('lastFrameId') || 0;
   }
 
   reset() {
@@ -19,6 +21,8 @@ class DataBus {
     this.room = null;
     this.isSingle = false;
     this._userId = "";
+    this.lastFrame = 0;
+    this.lastFrame = 0;
   }
 
   get roomInfo() {
@@ -51,6 +55,10 @@ class DataBus {
     this.bullets.splice(this.bullets.indexOf(bullet), 1);
 
     bullet.parent.removeChild(bullet);
+  }
+
+  set frameId(val) {
+    localStorage.setItem('lastFrameId', val);
   }
 }
 

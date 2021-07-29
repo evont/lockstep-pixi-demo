@@ -58,6 +58,7 @@ class App extends PIXI.Application {
   scenesInit() {
     if (databus.isSingle) {
       EventBus.on("onGameStart", () => {
+        console.log("signle start")
         databus.gameInstance = this.runScene(Battle);
       });
     } else {
@@ -66,7 +67,6 @@ class App extends PIXI.Application {
       });
 
       gameServer.event.on("createRoom", () => {
-        console.log("enfasdfa");
         this.runScene(Room);
       });
 
@@ -153,15 +153,7 @@ class App extends PIXI.Application {
   }
 
   _update(dt) {
-    if (databus.isSingle) {
-      if (databus.gameInstance) {
-        databus.gameInstance.renderUpdate(dt);
-        databus.gameInstance.logicUpdate(parseInt(1000 / 30));
-        databus.gameInstance.preditUpdate(parseInt(1000 / 30));
-      }
-    } else {
-      gameServer.update(dt);
-    }
+    gameServer.update(dt);
 
     Tween.update();
   }
@@ -180,6 +172,11 @@ class App extends PIXI.Application {
     const isSingle = urlParams.searchParams.get("single");
     if (isSingle) {
       databus.isSingle = true;
+      import(/* webpackChunkName: 'game-server' */ "./gamemock").then(
+        (res) => {
+          gameServer = res.default;
+        }
+      );
     } else {
       return import(/* webpackChunkName: 'game-server' */ "./gameserver").then(
         (res) => {
